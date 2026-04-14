@@ -21,6 +21,15 @@ Run commands with:
 python pkh.py <entity> <action> [--id ...] [--set field=value ...] [--json]
 ```
 
+You can also use a few conversational aliases, for example:
+
+```bash
+python pkh.py show me my active goals
+python pkh.py show dashboard
+python pkh.py search for strategy
+python pkh.py search tag AI
+```
+
 ## Entities
 
 - `profile`

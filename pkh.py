@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -562,8 +563,67 @@ def build_search_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def parse_natural_command(argv: list[str]) -> list[str] | None:
+    """Map a few conversational phrases to CLI args."""
+    if not argv:
+        return None
+    # If already a structured command, do nothing.
+    if argv[0] in SPECIAL_COMMANDS or argv[0] in ENTITIES:
+        return None
+
+    text = " ".join(argv).strip().lower()
+
+    if "dashboard" in text:
+        return ["dashboard"]
+    if "weekly review" in text:
+        return ["weekly-review"]
+    if "open loops" in text:
+        return ["open-loops"]
+
+    # Search phrases
+    m = re.search(r"search(?: for)? (?:tag )?['\"]?([\w\- ]+)['\"]?$", text)
+    if m and "tag" in text:
+        return ["search", "tag", m.group(1).strip()]
+    if m:
+        return ["search", "keyword", m.group(1).strip()]
+
+    entity_aliases = {
+        "goal": "goals",
+        "goals": "goals",
+        "project": "projects",
+        "projects": "projects",
+        "daily note": "daily-notes",
+        "daily notes": "daily-notes",
+        "knowledge": "knowledge",
+        "story": "stories",
+        "stories": "stories",
+        "profile": "profile",
+    }
+
+    for alias, entity in entity_aliases.items():
+        if alias in text:
+            if any(w in text for w in ["show", "list", "display"]):
+                cmd = [entity, "list"]
+                if "active" in text and entity in {"goals", "projects"}:
+                    cmd += ["--status", "active"]
+                if "done" in text and entity in {"goals", "projects"}:
+                    cmd += ["--status", "done"]
+                tag_match = re.search(r"tag\s+([\w\-]+)", text)
+                if tag_match and entity != "profile":
+                    cmd += ["--tag", tag_match.group(1)]
+                return cmd
+            if "view" in text and entity != "profile":
+                id_match = re.search(r"(?:id\\s*|#)(\\d+)", text)
+                if id_match:
+                    return [entity, "view", "--id", id_match.group(1)]
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = argv or sys.argv[1:]
+    nl = parse_natural_command(argv)
+    if nl:
+        argv = nl
 
     if argv and argv[0] in SPECIAL_COMMANDS:
         data = load_data()

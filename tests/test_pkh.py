@@ -591,6 +591,31 @@ class TestPKH(unittest.TestCase):
         self.assertIn("== Search Results ==", out.stdout)
         self.assertIn("[knowledge]", out.stdout)
 
+    def test_natural_language_alias_for_active_goals(self):
+        run_cli(
+            [
+                "goals", "create", "--set", "title=Alpha", "--set", "whyItMatters=W", "--set", "status=active",
+                "--set", "targetDate=2026-04-22", "--set", "nextAction=Do", "--set", "tags=t", "--set", "linkedProjects=1",
+            ],
+            self.cwd,
+        )
+        run_cli(
+            [
+                "goals", "create", "--set", "title=Beta", "--set", "whyItMatters=W", "--set", "status=done",
+                "--set", "targetDate=2026-04-23", "--set", "nextAction=Done", "--set", "tags=t", "--set", "linkedProjects=1",
+            ],
+            self.cwd,
+        )
+        out = run_cli(["show", "me", "my", "active", "goals"], self.cwd)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("Alpha", out.stdout)
+        self.assertNotIn("Beta", out.stdout)
+
+    def test_natural_language_alias_for_dashboard(self):
+        out = run_cli(["show", "dashboard"], self.cwd)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("Dashboard", out.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
