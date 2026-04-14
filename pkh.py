@@ -7,7 +7,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -197,7 +197,9 @@ def create_record(data: dict[str, Any], entity: str, payload: dict[str, Any]) ->
     record = dict(payload)
     record["id"] = _next_id(items)
     if entity in {"knowledge", "stories"} and "createdAt" not in record:
-        record["createdAt"] = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        record["createdAt"] = (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
     items.append(record)
     save_data(data)
     return record
@@ -356,12 +358,16 @@ def _format_record_lines(entity: str, record: dict[str, Any]) -> list[str]:
 
 
 def build_dashboard(data: dict[str, Any]) -> dict[str, Any]:
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     todays_note = next((n for n in data["daily-notes"] if n.get("date") == today), None)
 
     top_priorities: list[str] = []
     if todays_note and todays_note.get("topPriorities"):
-        top_priorities = [todays_note["topPriorities"]]
+        raw = todays_note["topPriorities"]
+        if isinstance(raw, list):
+            top_priorities = [str(item) for item in raw]
+        else:
+            top_priorities = [str(raw)]
 
     return {
         "activeGoals": [g for g in data["goals"] if g.get("status") == "active"],
@@ -374,7 +380,7 @@ def build_dashboard(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_weekly_review(data: dict[str, Any]) -> dict[str, Any]:
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     horizon = today + timedelta(days=14)
 
     upcoming_goals = []
@@ -414,7 +420,7 @@ def build_open_loops(data: dict[str, Any]) -> dict[str, Any]:
             for n in data["daily-notes"]
             if _has_content(n.get("concerns")) and not _has_content(n.get("tomorrowFocus"))
         ],
-        "profileGaps": [field for field in required_profile if not profile.get(field, "").strip()],
+        "profileGaps": [field for field in required_profile if not _has_content(profile.get(field))],
     }
 
 

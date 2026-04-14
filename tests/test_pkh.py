@@ -2,6 +2,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -300,6 +301,7 @@ class TestPKH(unittest.TestCase):
 
 
     def test_dashboard_command_json_shape(self):
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         run_cli(
             [
                 "goals", "create", "--set", "title=G1", "--set", "whyItMatters=W", "--set", "status=active",
@@ -316,7 +318,7 @@ class TestPKH(unittest.TestCase):
         )
         run_cli(
             [
-                "daily-notes", "create", "--set", "date=2026-04-14", "--set", "summary=s", "--set", "topPriorities=Top one",
+                "daily-notes", "create", "--set", f"date={today}", "--set", "summary=s", "--set", "topPriorities=Top one",
                 "--set", "lessons=l", "--set", "concerns=c", "--set", "tomorrowFocus=tf", "--set", "linkedProjects=1", "--set", "tags=t",
             ],
             self.cwd,
@@ -346,6 +348,7 @@ class TestPKH(unittest.TestCase):
         self.assertIn("recentStories", payload)
         self.assertIn("todayTopPriorities", payload)
         self.assertIsInstance(payload["todayTopPriorities"], list)
+        self.assertEqual(payload["todayTopPriorities"], ["Top one"])
 
     def test_weekly_review_and_open_loops_json_shape(self):
         run_cli(
@@ -641,6 +644,27 @@ class TestPKH(unittest.TestCase):
         self.assertEqual(weekly.returncode, 0, weekly.stderr)
         weekly_payload = json.loads(weekly.stdout)
         self.assertIn("lesson one", weekly_payload["recentLessons"][0]["lesson"])
+
+    def test_open_loops_profile_gaps_handles_list_values(self):
+        hub_path = self.cwd / "hub.json"
+        data = {
+            "profile": {
+                "name": ["Daniel"],
+                "currentRole": ["Executive"],
+                "values": ["integrity"],
+                "longTermVision": ["Meaningful impact"],
+            },
+            "goals": [],
+            "projects": [],
+            "daily-notes": [],
+            "knowledge": [],
+            "stories": [],
+        }
+        hub_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        loops = run_cli(["open-loops", "--json"], self.cwd)
+        self.assertEqual(loops.returncode, 0, loops.stderr)
+        payload = json.loads(loops.stdout)
+        self.assertEqual(payload["profileGaps"], [])
 
 
 if __name__ == "__main__":
