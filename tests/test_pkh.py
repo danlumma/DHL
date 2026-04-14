@@ -616,6 +616,32 @@ class TestPKH(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("Dashboard", out.stdout)
 
+    def test_open_loops_handles_list_fields(self):
+        run_cli(
+            [
+                "daily-notes", "create", "--set", "date=2026-04-14", "--set", "summary=S", "--set", "topPriorities=P",
+                "--set", "lessons=L", "--set", "concerns=C", "--set", "tomorrowFocus=T", "--set", "linkedProjects=1", "--set", "tags=t",
+            ],
+            self.cwd,
+        )
+        # Convert text fields to list-like values directly in hub.json to mimic imported data.
+        hub_path = self.cwd / "hub.json"
+        data = json.loads(hub_path.read_text(encoding="utf-8"))
+        data["daily-notes"][0]["concerns"] = ["one concern"]
+        data["daily-notes"][0]["tomorrowFocus"] = []
+        data["daily-notes"][0]["lessons"] = ["lesson one", "lesson two"]
+        hub_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+        loops = run_cli(["open-loops", "--json"], self.cwd)
+        self.assertEqual(loops.returncode, 0, loops.stderr)
+        loops_payload = json.loads(loops.stdout)
+        self.assertEqual(len(loops_payload["dailyNotesConcernsNoTomorrowFocus"]), 1)
+
+        weekly = run_cli(["weekly-review", "--json"], self.cwd)
+        self.assertEqual(weekly.returncode, 0, weekly.stderr)
+        weekly_payload = json.loads(weekly.stdout)
+        self.assertIn("lesson one", weekly_payload["recentLessons"][0]["lesson"])
+
 
 if __name__ == "__main__":
     unittest.main()

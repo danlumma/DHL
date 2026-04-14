@@ -318,6 +318,18 @@ def _sort_by_id(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(records, key=lambda item: int(item.get("id", 0)))
 
 
+def _as_text(value: Any) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(item) for item in value)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _has_content(value: Any) -> bool:
+    return bool(_as_text(value).strip())
+
+
 def _status_badge(status: str | None) -> str:
     mapping = {
         "active": "🟢 active",
@@ -373,7 +385,7 @@ def build_weekly_review(data: dict[str, Any]) -> dict[str, Any]:
 
     recent_lessons = []
     for note in _sort_by_date_desc(data["daily-notes"], "date")[:7]:
-        lesson_text = note.get("lessons", "")
+        lesson_text = _as_text(note.get("lessons", ""))
         if lesson_text:
             recent_lessons.append({"date": note.get("date", ""), "lesson": lesson_text})
 
@@ -400,7 +412,7 @@ def build_open_loops(data: dict[str, Any]) -> dict[str, Any]:
         "dailyNotesConcernsNoTomorrowFocus": [
             n
             for n in data["daily-notes"]
-            if n.get("concerns", "").strip() and not n.get("tomorrowFocus", "").strip()
+            if _has_content(n.get("concerns")) and not _has_content(n.get("tomorrowFocus"))
         ],
         "profileGaps": [field for field in required_profile if not profile.get(field, "").strip()],
     }
