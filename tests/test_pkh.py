@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PKH = ROOT / "pkh.py"
 
 
-def run_cli(args, cwd):
+def run_cli(args, cwd, input_text=None):
     cmd = ["python", str(PKH)] + args
-    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
+    return subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, input=input_text)
 
 
 class TestPKH(unittest.TestCase):
@@ -618,6 +618,50 @@ class TestPKH(unittest.TestCase):
         out = run_cli(["show", "dashboard"], self.cwd)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("Dashboard", out.stdout)
+
+    def test_interactive_create_goals_prompt_mode(self):
+        prompt_input = "\n".join(
+            [
+                "Prompt Goal",
+                "Because it matters",
+                "active",
+                "2026-12-31",
+                "Do the next thing",
+                "focus,planning",
+                "project-0001",
+            ]
+        ) + "\n"
+        res = run_cli(["goals", "create", "--prompt", "--json"], self.cwd, input_text=prompt_input)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        payload = json.loads(res.stdout)
+        self.assertEqual(payload["title"], "Prompt Goal")
+        self.assertEqual(payload["tags"], ["focus", "planning"])
+
+    def test_interactive_edit_prompt_mode(self):
+        run_cli(
+            [
+                "goals", "create", "--set", "title=Base", "--set", "whyItMatters=W", "--set", "status=active",
+                "--set", "targetDate=2026-12-31", "--set", "nextAction=Do", "--set", "tags=t", "--set", "linkedProjects=1",
+            ],
+            self.cwd,
+        )
+        # Skip all fields except status and nextAction in edit prompt.
+        prompt_input = "\n".join(
+            [
+                "",  # title
+                "",  # whyItMatters
+                "done",
+                "",  # targetDate
+                "Close out",
+                "",  # tags
+                "",  # linkedProjects
+            ]
+        ) + "\n"
+        res = run_cli(["goals", "edit", "--id", "1", "--prompt", "--json"], self.cwd, input_text=prompt_input)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        payload = json.loads(res.stdout)
+        self.assertEqual(payload["status"], "done")
+        self.assertEqual(payload["nextAction"], "Close out")
 
     def test_open_loops_handles_list_fields(self):
         run_cli(

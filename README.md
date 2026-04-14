@@ -21,6 +21,14 @@ Run commands with:
 python pkh.py <entity> <action> [--id ...] [--set field=value ...] [--json]
 ```
 
+Optional interactive mode:
+
+```bash
+python pkh.py <entity> <action> --prompt
+```
+
+Interactive mode prompts field-by-field for `create` and `edit`.
+
 You can also use a few conversational aliases, for example:
 
 ```bash

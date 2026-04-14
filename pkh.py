@@ -97,6 +97,25 @@ DATE_FIELDS = {
     "goals": ["targetDate"],
     "daily-notes": ["date"],
 }
+LIST_LIKE_FIELDS = {
+    "majorExperiences",
+    "strengths",
+    "growthAreas",
+    "personalityQualities",
+    "coreBeliefs",
+    "values",
+    "motivations",
+    "tags",
+    "linkedProjects",
+    "milestones",
+    "risks",
+    "linkedGoals",
+    "topPriorities",
+    "lessons",
+    "concerns",
+    "tomorrowFocus",
+    "useCases",
+}
 
 
 class PKHError(Exception):
@@ -138,6 +157,40 @@ def parse_set_args(set_args: list[str]) -> dict[str, Any]:
             raise PKHError(f"Invalid --set value '{item}'. Field name is empty.")
         parsed[field] = value
     return parsed
+
+
+def _coerce_prompt_value(field: str, raw: str) -> Any:
+    raw = raw.strip()
+    if field in LIST_LIKE_FIELDS:
+        if not raw:
+            return []
+        return [part.strip() for part in raw.split(",") if part.strip()]
+    return raw
+
+
+def prompt_for_payload(entity: str, action: str, current: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    current = current or {}
+    fields = [f for f in ENTITIES[entity] if f not in {"id", "createdAt"}]
+    print(
+        f"Interactive {action} for {entity}. Press Enter to keep current value (edit) or skip optional.",
+        file=sys.stderr,
+    )
+    for field in fields:
+        if action == "create" and field in REQUIRED_BY_ENTITY[entity]:
+            required_marker = " (required)"
+        else:
+            required_marker = ""
+        existing = current.get(field)
+        existing_hint = f" [{existing}]" if action == "edit" and existing not in (None, "") else ""
+        sys.stderr.write(f"{field}{required_marker}{existing_hint}: ")
+        sys.stderr.flush()
+        response = input()
+        if action == "edit" and response.strip() == "":
+            continue
+        value = _coerce_prompt_value(field, response)
+        payload[field] = value
+    return payload
 
 
 def ensure_known_fields(entity: str, payload: dict[str, Any]) -> None:
@@ -561,6 +614,7 @@ def build_standard_parser() -> argparse.ArgumentParser:
     parser.add_argument("--set", action="append", default=[], metavar="field=value")
     parser.add_argument("--status")
     parser.add_argument("--tag")
+    parser.add_argument("--prompt", action="store_true", dest="prompt_mode")
     parser.add_argument("--json", action="store_true", dest="json_out")
     return parser
 
@@ -677,8 +731,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        payload = parse_set_args(args.set)
         data = load_data()
+        payload = parse_set_args(args.set)
+
+        if args.prompt_mode and args.action in {"create", "edit"}:
+            if args.action == "edit":
+                if args.entity != "profile" and not args.record_id:
+                    args.record_id = input("id: ").strip()
+                current_record = view_record(data, args.entity, args.record_id)
+                payload.update(prompt_for_payload(args.entity, "edit", current_record))
+            else:
+                payload.update(prompt_for_payload(args.entity, "create"))
 
         if args.action == "create":
             result = create_record(data, args.entity, payload)
