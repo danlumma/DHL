@@ -278,18 +278,21 @@ def list_records(
     tag: str | None = None,
 ) -> Any:
     records = data[entity]
+    if status is not None:
+        if entity not in {"goals", "projects"}:
+            raise PKHError("--status is only supported for goals and projects list.")
+    if tag is not None:
+        if entity not in {"goals", "projects", "daily-notes", "knowledge", "stories"}:
+            raise PKHError("--tag is not supported for this entity list.")
+
     if entity == "profile":
         return records
 
     filtered = list(records)
     if status is not None:
-        if entity not in {"goals", "projects"}:
-            raise PKHError("--status is only supported for goals and projects list.")
         filtered = [item for item in filtered if str(item.get("status", "")).lower() == status.lower()]
 
     if tag is not None:
-        if entity not in {"goals", "projects", "daily-notes", "knowledge", "stories"}:
-            raise PKHError("--tag is not supported for this entity list.")
         filtered = [item for item in filtered if _has_tag(item, tag)]
 
     return filtered
@@ -411,7 +414,7 @@ def _format_record_lines(entity: str, record: dict[str, Any]) -> list[str]:
 
 
 def build_dashboard(data: dict[str, Any]) -> dict[str, Any]:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
     todays_note = next((n for n in data["daily-notes"] if n.get("date") == today), None)
 
     top_priorities: list[str] = []
@@ -433,7 +436,7 @@ def build_dashboard(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_weekly_review(data: dict[str, Any]) -> dict[str, Any]:
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now().date()
     horizon = today + timedelta(days=14)
 
     upcoming_goals = []

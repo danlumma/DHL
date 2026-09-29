@@ -4,6 +4,10 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
+
+import pkh
 
 ROOT = Path(__file__).resolve().parents[1]
 PKH = ROOT / "pkh.py"
@@ -301,7 +305,7 @@ class TestPKH(unittest.TestCase):
 
 
     def test_dashboard_command_json_shape(self):
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now().strftime("%Y-%m-%d")
         run_cli(
             [
                 "goals", "create", "--set", "title=G1", "--set", "whyItMatters=W", "--set", "status=active",
@@ -494,6 +498,40 @@ class TestPKH(unittest.TestCase):
         stories_tag = run_cli(["stories", "list", "--tag", "career", "--json"], self.cwd)
         self.assertEqual(stories_tag.returncode, 0, stories_tag.stderr)
         self.assertEqual(len(json.loads(stories_tag.stdout)), 1)
+
+    def test_profile_list_rejects_unsupported_filters(self):
+        for filter_args, expected_error in (
+            (["--status", "active"], "--status is only supported for goals and projects list."),
+            (["--tag", "career"], "--tag is not supported for this entity list."),
+        ):
+            with self.subTest(filter_args=filter_args):
+                result = run_cli(["profile", "list", *filter_args], self.cwd)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected_error, result.stderr)
+
+    def test_dashboard_and_weekly_review_use_local_calendar_day(self):
+        class ChicagoEvening(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                utc_instant = datetime(2026, 4, 15, 1, 30, tzinfo=timezone.utc)
+                if tz is not None:
+                    return utc_instant.astimezone(tz)
+                return utc_instant.astimezone(ZoneInfo("America/Chicago")).replace(tzinfo=None)
+
+        data = {
+            "profile": {},
+            "goals": [{"id": 1, "title": "Due today", "targetDate": "2026-04-14", "status": "active"}],
+            "projects": [],
+            "daily-notes": [{"date": "2026-04-14", "topPriorities": ["Finish review"]}],
+            "knowledge": [],
+            "stories": [],
+        }
+        with patch.object(pkh, "datetime", ChicagoEvening):
+            dashboard = pkh.build_dashboard(data)
+            weekly_review = pkh.build_weekly_review(data)
+
+        self.assertEqual(dashboard["todayTopPriorities"], ["Finish review"])
+        self.assertEqual(weekly_review["upcomingGoals14Days"], data["goals"])
 
     def test_search_keyword_tag_no_match_and_json_shape(self):
         run_cli(
